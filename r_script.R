@@ -31,6 +31,14 @@ data_corpus <- tm_map(data_corpus,stemDocument)
 data_corpus <- tm_map(data_corpus,removeWords,stopwords("english"))
 data_corpus <- tm_map(data_corpus,stripWhitespace)
 
-data_matrix <- DocumentTermMatrix(data_corpus,control = list(bounds = list(global = c(0.01, 0.8))))
+data_matrix <- DocumentTermMatrix(data_corpus)
+removeSparseTerms(data_matrix,0.999)
+rowTotals <- apply(data_matrix , 1, sum) 
+data_matrix   <- data_matrix[rowTotals> 0, ]
+
+data_svd <- svd(data_matrix)
+
 
 library(lda)
+library(topicmodels)
+data_lda <- LDA(data_matrix, k = 6)
