@@ -106,23 +106,22 @@ for(i in 1:length(model.fnames)){
 ```
 
 ```{r}
-rm(list = ls()) 
+rm(list = setdiff(ls(), c('clean_text'))) 
 ```
 
 ```{r}
+labels = c("toxic","severe_toxic","obscene","threat","insult","identity_hate")
 testdata = fread('data/test.csv')
 testdata$comment_text = clean_text(testdata$comment_text)
 #testdata = testdata[1:5000,]
-testdata.splitted = split(testdata, (seq(nrow(testdata))-1) %/% 1000) 
+testdata.splitted = split(testdata, (seq(nrow(testdata))-1) %/% 2000) 
 rm(testdata)
 
-#trace("create_matrix", edit=T) #'Acronym' -> 'acronym'
-
-probs = vector(mode='list', length=length(label.names))
-names(probs) = label.names
-for(i in 1:length(models)){
-  print(label.names[i])
-  model = models[[i]]
+for(i in 1:length(labels)){
+  label=labels[i]
+  load(paste0('models/', label, '_svm_model.r'))
+  load(paste0('doc_term_matrices/', label, '_dtm.r'))
+  
   chunk_probs = vector(mode='list', length=length(testdata.splitted))
   for(j in 1:length(testdata.splitted)){
     print(j)
@@ -135,17 +134,28 @@ for(i in 1:length(models)){
   }
   final_result = data.frame(unlist(chunk_probs))
   colnames(final_result) = c('prob')
-  write.table(final_result, file=paste0(label.names[i], '_results.csv'), quote=FALSE, sep=',', row.names=FALSE))
-  probs[[i]] = unlist(chunk_probs)
+  write.table(final_result, file=paste0('preds/', labels[i], '_results.csv'), quote=FALSE, sep=',', row.names=FALSE)
 }
 ```
 
 ```{r}
+
+rm(chunk_probs, docterm.matrix, i, j, label, model, pred.matrix, predContainer, predSize, testdata.splitted)
+probs = vector(mode='list', length=length(labels))
+for(i in 1:length(labels)){
+  label=labels[i]
+  file = paste0('preds/', labels[i], '_results.csv')
+  vec = fread(file)
+  vec = round(vec, 4)
+  colnames(vec) = c(label)
+  probs[[i]]=vec
+}
+
 allprobs = as.data.table(do.call(cbind, probs))
-allprobs$id = data$id[1:5000]
-setcolorder(allprobs, c('id', label.names))
-allprobs = allprobs[,c('id', label.names)]
-write.table(allprobs, file='all_results_first5000.csv', quote=FALSE, sep=',', row.names=FALSE)
+test = fread('data/test.csv')
+allprobs$id = test$id
+setcolorder(allprobs, c('id', labels))
+write.table(allprobs, file='submission.csv', quote=FALSE, sep=',', row.names=FALSE)
 ```
 
 
