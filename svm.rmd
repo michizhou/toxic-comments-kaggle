@@ -6,7 +6,7 @@ if(length(new.packages)) install.packages(new.packages)
 lapply(list.of.packages, require, character.only = TRUE)
 rm(list.of.packages, new.packages)
 
-opts_chunk$set(echo=TRUE,
+opts_chunk$set(echo=TRUE, eval=FALSE,
                cache=TRUE, autodep=TRUE,
                message=FALSE, warning=FALSE)
 options(scipen = 1, digits = 4)
@@ -16,7 +16,7 @@ In this project, I will use an SVM model to classify toxicity of online Wikipedi
 
 Data cleaning: I only kept letters and spaces.
 
-```{r}
+```{r eval=TRUE}
 clean_text = function(text){
   text = str_replace_all(text, pattern='\n', replacement=' ')
   text = tolower(str_replace_all(text, '[^[A-Za-z ][:space:]]', replacement=' '))
@@ -24,7 +24,7 @@ clean_text = function(text){
 }
 ```
 
-```{r}
+```{r eval=TRUE}
 train = fread("data/train.csv")
 train$comment_text = clean_text(train$comment_text)
 label.names = colnames(train)[3:8]
@@ -94,13 +94,12 @@ trace("create_matrix", edit=T) #'Acronym' -> 'acronym'
 
 Here are summaries of each of the model's performances:
 
-```{r}
+```{r eval=TRUE}
 for(i in 1:length(model.fnames)){
   label.name = gsub('models/', '', gsub('_svm.*$', '', model.fnames[i]))
 	load(model.fnames[i])
 	load(container.fnames[i])
   analytics = create_analytics(container, classify_model(container, model$SVM))
-  colnames(analytics) = c('Precision', 'Recall', 'F Score')
   print(kable(analytics@algorithm_summary, format='html', caption=paste0('Summary for ', label.name)))
 }
 ```

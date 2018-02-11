@@ -1,0 +1,4 @@
+unnamed-chunk-1	clean_text	text	str_replace_all	tolower	return
+unnamed-chunk-2	train	fread	comment_text	clean_text	label.names	colnames	model.fnames	paste0	doc_term_matrix.fnames	container.fnames
+unnamed-chunk-3	i	length	model.fnames	model.fname	doc_term_matrix.fname	doc_term_matrix.fnames	container.fname	container.fnames	file.exists	label.name	gsub	print	paste0	labels	train	SAMPLE.SIZE	PROPORTION.TRAIN	ntrain	floor	ntest	yes_label_indices	sample	which	n_yes	n_yes.draw	ifelse	ceiling	n_yes.train	n_yes.test	train_indices	test_indices	no_label_indices	cutoff	c	model_subset	docterm.matrix	create_matrix	comment_text	container	create_container	model	train_models	save
+unnamed-chunk-4	trace	T
