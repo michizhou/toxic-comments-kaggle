@@ -1,9 +1,8 @@
 ---
 title: "SVMs for Toxic Comment Classification"
-author: "Damon Pham"
+author: "Damon Pham, Samruda Pobbathi, Michael Zhou"
 date: "Feb. 11, 2017"
 ---
-
 
 ```{r setup, include=FALSE}
 list.of.packages <- c("stringr", "knitr", "RTextTools", "data.table", "caret", "ggplot2", "gridExtra", "AUC")
@@ -18,9 +17,10 @@ opts_chunk$set(echo=TRUE, eval=FALSE,
 options(scipen = 1, digits = 4)
 ```
 
-In this project, I will use an SVM model to classify toxicity of online Wikipedia comments.
+In this project, we use an SVM model to classify toxicity of online Wikipedia comments.
+(The results are later combined with another model to create an ensemble classifier.)
 
-Data cleaning: I only kept letters and spaces.
+We began by lightly cleaning the data, removing any non-alphabetical or non-space character. In the future, stop words should also be removed.
 
 ```{r eval=TRUE}
 clean_text = function(text){
@@ -44,9 +44,9 @@ container.fnames = paste0('containers/', label.names, '_container.r')
 
 There are six classes of toxicity, and comments can belong to none, one, or multiple classes. Most comments do not fall under any class of toxicity. 
 
-I decided to build six models, one for each class.
+We decided to build six models, one for each class, since they are not mutually exclusive.
 
-For each model, I sampled 14000 observations from the entire training set. Within this sample, I selected 80% to train my model on, and 20% to gauge their performance. For both the test and train set, I ensured as many up to half of the observations which belonged to the class of interest were selected.
+For each model, we sampled 14000 observations from the entire training set. Within this sample, we selected 80% to train the model on, and 20% for out-of-sample evaluation. For both the test and train set, to ensure sufficient representation of the class of interest, we selected as many as possible and up to a half of the observations which belonged to that class. We then trained the model on the training subset.
 
 ```{r}
 #Get the docterm.matrix and train the model.
@@ -101,7 +101,7 @@ for(i in 1:length(model.fnames)){
 trace("create_matrix", edit=T) #'Acronym' -> 'acronym'
 ```
 
-Here are summaries of each of the model's out-of-sample performances:
+We then used the out-of-sample subset to evaluate each model's performance. Here is the confusion matrix for each.
 
 ```{r eval=TRUE}
 p = vector(mode='list', length=length(model.fnames))
@@ -133,39 +133,13 @@ for(i in 1:length(model.fnames)){
 grid.arrange(grobs=p, ncol=3)
 ```
 
-```{r eval=TRUE}
-preds = vector(mode='list', length=length(model.fnames))
-labels = vector(mode='list', length=length(model.fnames))
-for(i in 1:length(model.fnames)){
-  label.name = gsub('models/', '', gsub('_svm.*$', '', model.fnames[i]))
-  load(model.fnames[i])
-  load(container.fnames[i])
- results = classify_model(container, model$SVM)
- preds[[i]] = ifelse(results$SVM_LABEL==1, results$SVM_PROB, 1-results$SVM_PROB)
- labels[[i]] = container@testing_codes
-}
-
-preds = do.call(cbind, preds)
-colnames(preds) = paste0(label.names, '_predprobs')
-labels = do.call(cbind, labels)
-colnames(labels) = label.names
-d = as.data.frame(cbind(preds, labels))
-
-interval = 0.02
-breaks = seq(0, 1, interval)
-
-```
-
-```{r}
-for(i in 1:length(label.names)){
-  roc_curve = AUC::roc(preds[,i], labels[,i])
-  plot(roc_curve)
-}
-```
-
 ```{r}
 rm(list = setdiff(ls(), c('clean_text'))) 
 ```
+
+This looks good for an out-of-the-box implementation! The greatest room for improvement is detecting threatening and severly toxic comments.
+
+We decided to go ahead and use this model to assign probabilities for each class for the real test dataset.
 
 ```{r}
 labels = c("toxic","severe_toxic","obscene","threat","insult","identity_hate")
@@ -221,4 +195,6 @@ setcolorder(allprobs, c('id', labels))
 write.table(allprobs, file='submission.csv', quote=FALSE, sep=',', row.names=FALSE)
 ```
 
+This submission got a public score of 0.9402 (average AUC under the ROC curves for each class). This is a great result, even though it is not competitive in the Kaggle leaderboard :)
 
+When we formed an ensemble with this SVM model and a LogitBoost model, we got a slightly-better result of 0.9531.
