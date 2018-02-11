@@ -1,0 +1,77 @@
+---
+title: "SVMs for Toxic Comment Classification"
+author: "Damon Pham"
+date: "Feb. 11, 2017"
+---
+
+```{r setup, include=FALSE}
+list.of.packages <- c("stringr", "knitr", "topicmodels", "tm", "data.table")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+lapply(list.of.packages, require, character.only = TRUE)
+rm(list.of.packages, new.packages)
+
+opts_chunk$set(echo=TRUE, eval=FALSE,
+               cache=TRUE, autodep=TRUE,
+               message=FALSE, warning=FALSE)
+options(scipen = 1, digits = 4)
+```
+
+In this project, I will use an SVM model to classify toxicity of online Wikipedia comments.
+
+Data cleaning: I only kept letters and spaces.
+
+```{r eval=TRUE}
+clean_text = function(text){
+  text = str_replace_all(text, pattern='\n', replacement=' ')
+  text = tolower(str_replace_all(text, '[^[A-Za-z ][:space:]]', replacement=' '))
+  return(text)
+}
+```
+
+```{r eval=TRUE}
+cwd = getwd()
+setwd('..')
+train = fread("data/train.csv")
+setwd(cwd)
+train$comment_text = clean_text(train$comment_text)
+label.names = colnames(train)[3:8]
+```
+
+```{r}
+SAMPLE.SIZE = 12000
+PROPORTION.TRAIN = 0.8
+ntrain = floor(SAMPLE.SIZE*PROPORTION.TRAIN)
+train = train[sample(nrow(train), SAMPLE.SIZE),]
+train.train = train[1:ntrain]
+train.test = train[(ntrain + 1):(ntrain + SAMPLE.SIZE * (1 - PROPORTION.TRAIN))]
+```
+
+```{r}
+docs = Corpus(VectorSource(train.train$comment_text))
+#https://stackoverflow.com/questions/13944252/remove-empty-documents-from-documenttermmatrix-in-r-topicmodels
+dtm = DocumentTermMatrix(docs, control=list(bounds = list(global = c(3,Inf))))
+rowTotals = apply(dtm , 1, sum) #Find the sum of words in each Document
+dtm = dtm[rowTotals> 0, ]           #remove all docs without words
+```
+
+```{r}
+rm(train, docs)
+lda.results = LDA(dtm, k=10, method='Gibbs', control=list(seed = c(1,2,3,4,5), burnin=1000, iter=200, thin=20, verbose=100))
+```
+
+```{r}
+train_probs = lda.results@gamma
+
+docs = Corpus(VectorSource(train.test$comment_text))
+#https://stackoverflow.com/questions/13944252/remove-empty-documents-from-documenttermmatrix-in-r-topicmodels
+dtm_test = DocumentTermMatrix(docs, control=list(bounds = list(global = c(3,Inf))))
+rowTotals = apply(dtm_test , 1, sum) #Find the sum of words in each Document
+dtm_test = dtm_test[rowTotals> 0, ]           #remove all docs without words
+
+test_probs = posterior(lda.results, dtm_test)
+test_probs = test_probs$topics
+
+#remove stopwords.
+#build something to go from lda topic probs to classifications.
+```

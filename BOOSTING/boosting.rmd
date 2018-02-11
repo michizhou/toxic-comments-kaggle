@@ -1,0 +1,177 @@
+---
+title: "BOOSTING for Toxic Comment Classification"
+author: "Damon Pham"
+date: "Feb. 11, 2017"
+---
+
+```{r setup, include=FALSE}
+list.of.packages <- c("stringr", "knitr", "RTextTools", "data.table")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+lapply(list.of.packages, require, character.only = TRUE)
+rm(list.of.packages, new.packages)
+
+opts_chunk$set(echo=TRUE, eval=TRUE, #FALSE to knit.
+               cache=TRUE, autodep=TRUE,
+               message=FALSE, warning=FALSE)
+options(scipen = 1, digits = 4)
+```
+
+In this project, I will use an Boosting model to classify toxicity of online Wikipedia comments.
+
+Data cleaning: I only kept letters and spaces.
+
+```{r eval=TRUE}
+clean_text = function(text){
+  text = str_replace_all(text, pattern='\n', replacement=' ')
+  text = tolower(str_replace_all(text, '[^[A-Za-z ][:space:]]', replacement=' '))
+  return(text)
+}
+```
+
+```{r eval=TRUE}
+cwd = getwd()
+setwd('..')
+train = fread("data/train.csv")
+setwd(cwd)
+train$comment_text = clean_text(train$comment_text)
+label.names = colnames(train)[3:8]
+model.fnames = paste0('models/', label.names, '_boosting_model.r')
+doc_term_matrix.fnames = paste0('doc_term_matrices/', label.names, '_dtm.r')
+container.fnames = paste0('containers/', label.names, '_container.r')
+```
+
+There are six classes of toxicity, and comments can belong to none, one, or multiple classes. Most comments do not fall under any class of toxicity. 
+
+I decided to build six models, one for each class.
+
+For each model, I sampled 14000 observations from the entire training set. Within this sample, I selected 80% to train my model on, and 20% to gauge their performance. For both the test and train set, I ensured as many up to half of the observations which belonged to the class of interest were selected.
+
+```{r}
+#Get the docterm.matrix and train the model.
+for(i in 1:length(model.fnames)){
+  model.fname = model.fnames[i]
+  doc_term_matrix.fname = doc_term_matrix.fnames[i]
+  container.fname = container.fnames[i]
+  if(!file.exists(model.fname)){
+    label.name = gsub('models/', '', gsub('_boosting.*$', '', model.fname))
+    print(paste0('sampling ', label.name))
+    labels = train[[label.name]]
+    
+    SAMPLE.SIZE = 14000
+    PROPORTION.TRAIN = 0.8
+    ntrain = floor(SAMPLE.SIZE*PROPORTION.TRAIN)
+    ntest = SAMPLE.SIZE - ntrain
+    
+    yes_label_indices = sample(which(labels==1))
+    n_yes = length(yes_label_indices)
+    n_yes.draw = ifelse(ceiling(SAMPLE.SIZE/2) < n_yes, ceiling(SAMPLE.SIZE/2), n_yes)
+    n_yes.train = floor(n_yes.draw * PROPORTION.TRAIN)
+    n_yes.test = floor(n_yes.draw * (1-PROPORTION.TRAIN))
+    train_indices = yes_label_indices[1:n_yes.train]
+    test_indices = yes_label_indices[(n_yes.train+1):(n_yes.train + n_yes.test)]
+    
+    no_label_indices = sample(which(labels==0))
+    cutoff = ntrain - length(train_indices)
+    train_indices = c(train_indices, no_label_indices[1:cutoff])
+    no_label_indices = no_label_indices[(cutoff+1):length(no_label_indices)]
+    cutoff = ntest - length(test_indices)
+    test_indices = c(test_indices, no_label_indices[1:cutoff])
+    
+    model_subset = train[c(train_indices, test_indices)]
+    labels=model_subset[[label.name]]
+    print(paste0('making docterm matrix and container for ', label.name))
+    docterm.matrix = create_matrix(model_subset$comment_text, removeSparseTerms=.999)
+    container = create_container(docterm.matrix, labels=labels, trainSize = 1:ntrain, 
+                                 testSize = (ntrain+1):(ntrain+ntest), virgin=FALSE)
+    
+    print(paste0('training ', label.name))
+    model = train_models(container, algorithms=c("BOOSTING"), kernel="linear", cost=1)
+    save(docterm.matrix, file=doc_term_matrix.fname)
+    save(model, file=model.fname)
+    save(container, file=container.fname)
+    
+  }
+}
+```
+
+```{r}
+#Error in source code: fix manually.
+#trace("create_matrix", edit=T) #'Acronym' -> 'acronym'
+```
+
+Here are summaries of each of the model's performances:
+
+```{r eval=TRUE}
+for(i in 1:length(model.fnames)){
+  label.name = gsub('models/', '', gsub('_boosting.*$', '', model.fnames[i]))
+	load(model.fnames[i])
+	load(container.fnames[i])
+  analytics = create_analytics(container, classify_model(container, model$BOOSTING))
+  print(kable(analytics@algorithm_summary, caption=paste0('Summary for ', label.name)))
+}
+```
+
+```{r}
+rm(list = setdiff(ls(), c('clean_text'))) 
+```
+
+```{r}
+labels = c("toxic","severe_toxic","obscene","threat","insult","identity_hate")
+cwd = getwd()
+setwd('..')
+testdata = fread("data/test.csv")
+setwd(cwd)
+testdata$comment_text = clean_text(testdata$comment_text)
+testdata.splitted = split(testdata, (seq(nrow(testdata))-1) %/% 2000) 
+rm(testdata)
+
+for(i in 1:length(labels)){
+  label=labels[i]
+  load(paste0('models/', label, '_boosting_model.r'))
+  load(paste0('doc_term_matrices/', label, '_dtm.r'))
+  
+  chunk_probs = vector(mode='list', length=length(testdata.splitted))
+  for(j in 1:length(testdata.splitted)){
+    print(j)
+    testdata.chunk = testdata.splitted[[j]]
+    pred.matrix = create_matrix(testdata.chunk$comment_text, originalMatrix=docterm.matrix)
+    predSize = nrow(testdata.chunk);
+    predContainer = create_container(pred.matrix, rep(0,predSize), testSize=1:predSize, virgin=FALSE)
+    results = classify_models(predContainer, model)
+    chunk_probs[[j]] = ifelse(results$LOGITBOOST_LABEL==1, results$LOGITBOOST_PROB, 1-results$LOGITBOOST_PROB)
+  }
+  final_result = data.frame(unlist(chunk_probs))
+  colnames(final_result) = c('prob')
+  write.table(final_result, file=paste0('preds/', labels[i], '_results.csv'), quote=FALSE, sep=',', row.names=FALSE)
+}
+```
+
+```{r}
+
+rm(chunk_probs, docterm.matrix, i, j, label, model, pred.matrix, predContainer, predSize, testdata.splitted)
+probs = vector(mode='list', length=length(labels))
+for(i in 1:length(labels)){
+  label=labels[i]
+  file = paste0('preds/', labels[i], '_results.csv')
+  vec = fread(file)
+  vec = round(vec, 4)
+  colnames(vec) = c(label)
+  probs[[i]]=vec
+}
+
+allprobs = as.data.table(do.call(cbind, probs))
+cwd = getwd()
+setwd('..')
+test = fread("data/test.csv")
+setwd(cwd)
+allprobs$id = test$id
+setcolorder(allprobs, c('id', labels))
+
+#I guessed this would help.
+allprobs[allprobs==.5] = .2
+
+write.table(allprobs, file='submission.csv', quote=FALSE, sep=',', row.names=FALSE)
+```
+
+
