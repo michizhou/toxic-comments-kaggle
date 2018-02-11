@@ -1,0 +1,23 @@
+```{r}
+library(data.table)
+
+model_names = c('SVM','BOOSTING')
+
+submission_file_names = paste0(model_names, '/submission.csv')
+submissions = lapply(submission_file_names, fread)
+for(i in 1:length(model_names)){
+  model_name = model_names[i]
+  colnames(submissions[[i]]) = paste0(model_name, ',', colnames(submissions[[i]]))
+}
+submissions = do.call(cbind, submissions)
+
+LABELS = c("toxic","severe_toxic","obscene","threat","insult","identity_hate")
+for(label in LABELS){
+  submissions[[label]] = 
+}
+boosting = submissions[[i]]
+
+
+LABELS = c("toxic","severe_toxic","obscene","threat","insult","identity_hate")
+rbindlist(submissions)[,lapply(,mean), list(LABELS)]
+```

@@ -162,7 +162,10 @@ for(i in 1:length(labels)){
 }
 
 allprobs = as.data.table(do.call(cbind, probs))
-test = fread('data/test.csv')
+cwd = getwd()
+setwd('..')
+test = fread("data/test.csv")
+setwd(cwd)
 allprobs$id = test$id
 setcolorder(allprobs, c('id', labels))
 write.table(allprobs, file='submission.csv', quote=FALSE, sep=',', row.names=FALSE)
