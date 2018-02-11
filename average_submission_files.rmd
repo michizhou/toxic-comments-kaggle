@@ -2,22 +2,23 @@
 library(data.table)
 
 model_names = c('SVM','BOOSTING')
+LABELS = c("toxic","severe_toxic","obscene","threat","insult","identity_hate")
 
 submission_file_names = paste0(model_names, '/submission.csv')
 submissions = lapply(submission_file_names, fread)
-for(i in 1:length(model_names)){
-  model_name = model_names[i]
-  colnames(submissions[[i]]) = paste0(model_name, ',', colnames(submissions[[i]]))
-}
-submissions = do.call(cbind, submissions)
+names(submissions) = model_names
+boosting = submissions[['BOOSTING']]
+boosting[boosting==.2] = NA
+submissions[['BOOSTING']] = boosting
 
-LABELS = c("toxic","severe_toxic","obscene","threat","insult","identity_hate")
+submissions=do.call(cbind, submissions)
 for(label in LABELS){
-  submissions[[label]] = 
+  cols = paste0(model_names, '.', label)
+  submissions[[label]] = apply(submissions[,..cols], 1, mean, na.rm=TRUE)
 }
-boosting = submissions[[i]]
 
-
-LABELS = c("toxic","severe_toxic","obscene","threat","insult","identity_hate")
-rbindlist(submissions)[,lapply(,mean), list(LABELS)]
+cols_to_keep = c(paste0(model_names[1], '.', 'id'), LABELS)
+submissions = submissions[,..cols_to_keep]
+colnames(submissions)[1] = 'id'
+write.table(submissions, file='averaged_submission.csv', quote=FALSE, sep=',', row.names=FALSE)
 ```

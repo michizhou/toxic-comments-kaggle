@@ -6,7 +6,7 @@ date: "Feb. 11, 2017"
 
 
 ```{r setup, include=FALSE}
-list.of.packages <- c("stringr", "knitr", "RTextTools", "data.table")
+list.of.packages <- c("stringr", "knitr", "RTextTools", "data.table", "caret", "ggplot2", "gridExtra")
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)) install.packages(new.packages)
 lapply(list.of.packages, require, character.only = TRUE)
@@ -101,16 +101,36 @@ for(i in 1:length(model.fnames)){
 trace("create_matrix", edit=T) #'Acronym' -> 'acronym'
 ```
 
-Here are summaries of each of the model's performances:
+Here are summaries of each of the model's out-of-sample performances:
 
 ```{r eval=TRUE}
+p = vector(mode='list', length=length(model.fnames))
 for(i in 1:length(model.fnames)){
   label.name = gsub('models/', '', gsub('_svm.*$', '', model.fnames[i]))
 	load(model.fnames[i])
 	load(container.fnames[i])
-  analytics = create_analytics(container, classify_model(container, model$SVM))
-  print(kable(analytics@algorithm_summary, caption=paste0('Summary for ', label.name)))
+	
+	true = container@testing_codes
+	predicted = classify_model(container, model$SVM)$SVM_LABEL
+	#print(confusionMatrix(data=predicted, reference=true, posi))
+	
+	confusion_matrix <- as.data.frame(table(predicted, true))
+
+  p[[i]] = ggplot(data = confusion_matrix,
+       mapping = aes(x = predicted,
+                     y = true)) +
+  geom_tile(aes(fill = Freq)) +
+  geom_text(aes(label = sprintf("%1.0f", Freq)), vjust = 1) +
+  scale_fill_gradient(low = "blue",
+                      high = "yellow",
+                      trans = "log") + theme(legend.position="none") + 
+                      labs(title=label.name)
+	
+  #analytics = create_analytics(container, classify_model(container, model$SVM))
+  #print(kable(analytics@algorithm_summary, caption=paste0('Summary for ', label.name)))
 }
+
+grid.arrange(grobs=p, ncol=3)
 ```
 
 ```{r}

@@ -4,3 +4,7 @@ knitr
 SparseM
 RTextTools
 data.table
+lattice
+ggplot2
+caret
+gridExtra
