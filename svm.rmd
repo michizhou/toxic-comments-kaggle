@@ -12,6 +12,10 @@ opts_chunk$set(echo=TRUE,
 options(scipen = 1, digits = 4)
 ```
 
+In this project, I will use an SVM model to classify toxicity of online Wikipedia comments.
+
+Data cleaning: I only kept letters and spaces.
+
 ```{r}
 clean_text = function(text){
   text = str_replace_all(text, pattern='\n', replacement=' ')
@@ -24,22 +28,29 @@ clean_text = function(text){
 train = fread("data/train.csv")
 train$comment_text = clean_text(train$comment_text)
 label.names = colnames(train)[3:8]
-```
-
-```{r}
 model.fnames = paste0('models/', label.names, '_svm_model.r')
 doc_term_matrix.fnames = paste0('doc_term_matrices/', label.names, '_dtm.r')
+container.fnames = paste0('containers/', label.names, '_container.r')
+```
 
+There are six classes of toxicity, and comments can belong to none, one, or multiple classes. Most comments do not fall under any class of toxicity. 
+
+I decided to build six models, one for each class.
+
+For each model, I sampled 14000 observations from the entire training set. Within this sample, I selected 80% to train my model on, and 20% to gauge their performance. For both the test and train set, I ensured as many up to half of the observations which belonged to the class of interest were selected.
+
+```{r}
 #Get the docterm.matrix and train the model.
 for(i in 1:length(model.fnames)){
   model.fname = model.fnames[i]
   doc_term_matrix.fname = doc_term_matrix.fnames[i]
+  container.fname = container.fnames[i]
   if(!file.exists(model.fname)){
     label.name = gsub('models/', '', gsub('_svm.*$', '', model.fname))
     print(paste0('sampling ', label.name))
     labels = train[[label.name]]
     
-    SAMPLE.SIZE = 15000
+    SAMPLE.SIZE = 14000
     PROPORTION.TRAIN = 0.8
     ntrain = floor(SAMPLE.SIZE*PROPORTION.TRAIN)
     ntest = SAMPLE.SIZE - ntrain
@@ -68,10 +79,34 @@ for(i in 1:length(model.fnames)){
     
     print(paste0('training ', label.name))
     model = train_models(container, algorithms=c("SVM"), kernel="linear", cost=1)
-    save(docter.matrix, file=doc_term_matrix.fname)
+    save(docterm.matrix, file=doc_term_matrix.fname)
     save(model, file=model.fname)
+    save(container, file=container.fname)
+    
   }
 }
+```
+
+```{r}
+#Error in source code: fix manually.
+trace("create_matrix", edit=T) #'Acronym' -> 'acronym'
+```
+
+Here are summaries of each of the model's performances:
+
+```{r}
+for(i in 1:length(model.fnames)){
+  label.name = gsub('models/', '', gsub('_svm.*$', '', model.fnames[i]))
+	load(model.fnames[i])
+	load(container.fnames[i])
+  analytics = create_analytics(container, classify_model(container, model$SVM))
+  colnames(analytics) = c('Precision', 'Recall', 'F Score')
+  print(kable(analytics@algorithm_summary, format='html', caption=paste0('Summary for ', label.name)))
+}
+```
+
+```{r}
+rm(list = ls()) 
 ```
 
 ```{r}
