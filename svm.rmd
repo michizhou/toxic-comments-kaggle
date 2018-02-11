@@ -23,37 +23,50 @@ clean_text = function(text){
 ```{r}
 train = fread("data/train.csv")
 train$comment_text = clean_text(train$comment_text)
-docterm.matrix = create_matrix(train$comment_text, removeSparseTerms=.999)
 label.names = colnames(train)[3:8]
 ```
 
 ```{r}
-model.fname = 'svm_models.r'
+model.fnames = paste0('models/', label.names, '_svm_model.r')
 
-if(!file.exists(model.fname)){
-  train = train[,..label.names] #memory
-  TRAIN.SAMPLE.SIZE = 10000
-  TEST.SAMPLE.SIZE = 2000
-  
-  
-  train.sample = sample(1:nrow(train), TRAIN.SAMPLE.SIZE+TEST.SAMPLE.SIZE, replace=F)
-  train = train[train.sample]
-  
-  models = vector(mode='list', length=length(label.names))
-  names(models)=label.names
-  
-  for(i in 1:length(models)){
-    label.name = label.names[i]
-    print(label.name)
+#Get the docterm.matrix and train the model.
+for(model.fname in model.fnames){
+  if(!file.exists(model.fname)){
+    label.name = gsub('models/', '', gsub('_svm.*$', '', model.fname))
+    print(paste0('sampling ', label.name))
+    labels = train[[label.name]]
     
-    train_indices = 
+    SAMPLE.SIZE = 12000
+    PROPORTION.TRAIN = 0.8
+    ntrain = floor(SAMPLE.SIZE*PROPORTION.TRAIN)
+    ntest = SAMPLE.SIZE - ntrain
     
-    container = create_container(docterm.matrix, labels=train$label.name, trainSize = 1:TRAIN.SAMPLE.SIZE, testSize = (TRAIN.SAMPLE.SIZE + 1):(TRAIN.SAMPLE.SIZE + 1 + TEST.SAMPLE.SIZE), virgin=FALSE)
-    models[[i]] = train_models(container, algorithms=c("SVM"), kernel="linear", cost=1)
+    yes_label_indices = sample(which(labels==1))
+    n_yes = length(yes_label_indices)
+    n_yes.draw = ifelse(ceiling(SAMPLE.SIZE/2) < n_yes, ceiling(SAMPLE.SIZE/2), n_yes)
+    n_yes.train = floor(n_yes.draw * PROPORTION.TRAIN)
+    n_yes.test = floor(n_yes.draw * (1-PROPORTION.TRAIN))
+    train_indices = yes_label_indices[1:n_yes.train]
+    test_indices = yes_label_indices[(n_yes.train+1):(n_yes.train + n_yes.test)]
+    
+    no_label_indices = sample(which(labels==0))
+    cutoff = ntrain - length(train_indices)
+    train_indices = c(train_indices, no_label_indices[1:cutoff])
+    no_label_indices = no_label_indices[(cutoff+1):length(no_label_indices)]
+    cutoff = ntest - length(test_indices)
+    test_indices = c(test_indices, no_label_indices[1:cutoff])
+    
+    model_subset = train[c(train_indices, test_indices)]
+    labels=model_subset[[label.name]]
+    print(paste0('making docterm matrix and container for ', label.name))
+    docterm.matrix = create_matrix(model_subset$comment_text, removeSparseTerms=.999)
+    container = create_container(docterm.matrix, labels=labels, trainSize = 1:ntrain, 
+                                 testSize = (ntrain+1):(ntrain+ntest), virgin=FALSE)
+    
+    print(paste0('training ', label.name))
+    model = train_models(container, algorithms=c("SVM"), kernel="linear", cost=1)
+    save(model, file=model.fname)
   }
-  rm(train, i, label.name)
-  
-  save(models, file=model.fname)
 }
 ```
 
