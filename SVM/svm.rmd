@@ -6,7 +6,7 @@ date: "Feb. 11, 2017"
 
 
 ```{r setup, include=FALSE}
-list.of.packages <- c("stringr", "knitr", "RTextTools", "data.table", "caret", "ggplot2", "gridExtra")
+list.of.packages <- c("stringr", "knitr", "RTextTools", "data.table", "caret", "ggplot2", "gridExtra", "AUC")
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)) install.packages(new.packages)
 lapply(list.of.packages, require, character.only = TRUE)
@@ -131,6 +131,36 @@ for(i in 1:length(model.fnames)){
 }
 
 grid.arrange(grobs=p, ncol=3)
+```
+
+```{r eval=TRUE}
+preds = vector(mode='list', length=length(model.fnames))
+labels = vector(mode='list', length=length(model.fnames))
+for(i in 1:length(model.fnames)){
+  label.name = gsub('models/', '', gsub('_svm.*$', '', model.fnames[i]))
+  load(model.fnames[i])
+  load(container.fnames[i])
+ results = classify_model(container, model$SVM)
+ preds[[i]] = ifelse(results$SVM_LABEL==1, results$SVM_PROB, 1-results$SVM_PROB)
+ labels[[i]] = container@testing_codes
+}
+
+preds = do.call(cbind, preds)
+colnames(preds) = paste0(label.names, '_predprobs')
+labels = do.call(cbind, labels)
+colnames(labels) = label.names
+d = as.data.frame(cbind(preds, labels))
+
+interval = 0.02
+breaks = seq(0, 1, interval)
+
+```
+
+```{r}
+for(i in 1:length(label.names)){
+  roc_curve = AUC::roc(preds[,i], labels[,i])
+  plot(roc_curve)
+}
 ```
 
 ```{r}
