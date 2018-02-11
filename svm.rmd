@@ -28,15 +28,18 @@ label.names = colnames(train)[3:8]
 
 ```{r}
 model.fnames = paste0('models/', label.names, '_svm_model.r')
+doc_term_matrix.fnames = paste0('doc_term_matrices/', label.names, '_dtm.r')
 
 #Get the docterm.matrix and train the model.
-for(model.fname in model.fnames){
+for(i in 1:length(model.fnames)){
+  model.fname = model.fnames[i]
+  doc_term_matrix.fname = doc_term_matrix.fnames[i]
   if(!file.exists(model.fname)){
     label.name = gsub('models/', '', gsub('_svm.*$', '', model.fname))
     print(paste0('sampling ', label.name))
     labels = train[[label.name]]
     
-    SAMPLE.SIZE = 12000
+    SAMPLE.SIZE = 15000
     PROPORTION.TRAIN = 0.8
     ntrain = floor(SAMPLE.SIZE*PROPORTION.TRAIN)
     ntest = SAMPLE.SIZE - ntrain
@@ -65,16 +68,16 @@ for(model.fname in model.fnames){
     
     print(paste0('training ', label.name))
     model = train_models(container, algorithms=c("SVM"), kernel="linear", cost=1)
+    save(docter.matrix, file=doc_term_matrix.fname)
     save(model, file=model.fname)
   }
 }
 ```
 
 ```{r}
-load('models.r')
 testdata = fread('data/test.csv')
 testdata$comment_text = clean_text(testdata$comment_text)
-testdata = testdata[1:5000,]
+#testdata = testdata[1:5000,]
 testdata.splitted = split(testdata, (seq(nrow(testdata))-1) %/% 1000) 
 rm(testdata)
 
